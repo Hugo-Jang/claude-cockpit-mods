@@ -1,0 +1,16 @@
+{
+  "name": "claude-cockpit-mods",
+  "owner": {
+    "name": "Hugo-Jang"
+  },
+  "metadata": {
+    "description": "Cockpit mod for Claude Code. Shared as-is."
+  },
+  "plugins": [
+    {
+      "name": "cockpit-mods",
+      "source": "./cockpit",
+      "description": "Weather-style context band, plan progress, usage limits, model and effort pickers, and confirmed Resume/Rewind/Compact/Clear buttons."
+    }
+  ]
+}

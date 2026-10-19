@@ -1,0 +1,12 @@
+{
+  "name": "cockpit-mods",
+  "version": "1.0.0",
+  "description": "Weather-style context band, plan progress, usage limits, model and effort pickers, and confirmed Resume/Rewind/Compact/Clear buttons",
+  "author": {
+    "name": "Hugo-Jang",
+    "url": "https://github.com/Hugo-Jang"
+  },
+  "repository": "https://github.com/Hugo-Jang/claude-cockpit-mods",
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}
