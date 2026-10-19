@@ -241,7 +241,7 @@ export const rateColor = (percent: number | null): string | undefined =>
 
 const percentText = (percent: number | null): string => (percent === null ? STRINGS.dash : `${Math.round(percent)}%`)
 
-// '라벨 사용률% ↻리셋 시각 (남은 시간)'. 없는 값은 '-'.
+// '라벨 사용률% ↻ 리셋 시각 (남은 시간)'. ↻ 뒤 공백은 폰트에 따라 기호가 숫자와 겹치는 것을 막는다. 없는 값은 '-'.
 export const limitSegs = (limit: Limit, now: number, withReset: boolean): Seg[] => {
   const color = rateColor(limit.percentUsed)
   const segs: Seg[] = [
@@ -250,7 +250,7 @@ export const limitSegs = (limit: Limit, now: number, withReset: boolean): Seg[] 
   ]
   if (withReset) {
     const reset = fmtReset(limit.resetsAt, now)
-    segs.push({ text: ` ↻${reset.text}${reset.remain ? ` (${reset.remain})` : ''}`, dim: true })
+    segs.push({ text: ` ↻ ${reset.text}${reset.remain ? ` (${reset.remain})` : ''}`, dim: true })
   }
 
   return segs

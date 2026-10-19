@@ -132,12 +132,12 @@ test('1줄째: 두 칸, 반올림, 없는 값은 -', () => {
     { kind: 'five_hour', percentUsed: 33.6, resetsAt: at(2 * H + 13 * M) },
   ])
   const row = buildRow1(HEAD, limits, NOW, 200)
-  expect(joined(row)).toBe('Sonnet 5.5 · medium │ 5h 34% ↻14:13 (2h 13m) │ Weekly 12% ↻10/23 12:00')
+  expect(joined(row)).toBe('Sonnet 5.5 · medium │ 5h 34% ↻ 14:13 (2h 13m) │ Weekly 12% ↻ 10/23 12:00')
   const pct = row.find(s => s.text === '34%')
   expect(pct?.color).toBe('green')
 
   const partial = normalizeLimits([{ kind: 'five_hour', percentUsed: undefined, resetsAt: undefined }])
-  expect(joined(buildRow1(HEAD, partial, NOW, 200))).toBe('Sonnet 5.5 · medium │ 5h - ↻-')
+  expect(joined(buildRow1(HEAD, partial, NOW, 200))).toBe('Sonnet 5.5 · medium │ 5h - ↻ -')
   expect(buildRow1(HEAD, partial, NOW, 200).find(s => s.text === '-' && s.dim)).toBeDefined()
 })
 
@@ -152,7 +152,7 @@ test('1줄째: 폭이 모자라면 Weekly 리셋, 5h 리셋 순으로 뺀다', (
   ])
   const full = joined(buildRow1(HEAD, limits, NOW, 200))
   const noWeeklyReset = joined(buildRow1(HEAD, limits, NOW, full.length - 1))
-  expect(noWeeklyReset).toBe('Sonnet 5.5 · medium │ 5h 34% ↻14:13 (2h 13m) │ Weekly 12%')
+  expect(noWeeklyReset).toBe('Sonnet 5.5 · medium │ 5h 34% ↻ 14:13 (2h 13m) │ Weekly 12%')
   const noResets = joined(buildRow1(HEAD, limits, NOW, noWeeklyReset.length - 1))
   expect(noResets).toBe('Sonnet 5.5 · medium │ 5h 34% │ Weekly 12%')
   expect(joined(buildRow1(HEAD, limits, NOW, 5))).toBe(noResets)

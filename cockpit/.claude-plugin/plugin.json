@@ -1,6 +1,6 @@
 {
   "name": "cockpit-mods",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Weather-style context band, plan progress, usage limits, model and effort pickers, and confirmed Resume/Rewind/Compact/Clear buttons",
   "author": {
     "name": "Hugo-Jang",
