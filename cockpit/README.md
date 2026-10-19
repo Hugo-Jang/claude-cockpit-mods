@@ -2,44 +2,95 @@
 
 # Cockpit
 
-A Claude Code mod that puts a cockpit around your session: a weather-style context band, plan progress, usage limits, model and effort pickers, and Resume / Rewind / Compact / Clear buttons that ask for confirmation before they run.
+A Claude Code mod that puts a cockpit above your prompt. It shows the model and effort, your usage limits, a weather-style forecast of the context window, and the progress of the current plan. It also gives you buttons for Resume, Rewind, Compact and Clear that ask for confirmation before they run, and pickers to switch the model and effort without typing a command.
 
-<!-- TODO: add a screenshot or GIF -->
-![Cockpit overview](screenshots/cockpit-overview.png)
+<!-- IMAGE 1: 밴드 전체(3줄, 테두리 포함)가 보이는 화면. 파일명: screenshots/cockpit-overview.png -->
+![Cockpit above the prompt: model and effort, usage limits, context forecast, plan progress and buttons](screenshots/cockpit-overview.png)
 
 ## What this shows
 
-<!-- TODO: paste a text sketch of the band as it looks in your terminal -->
+```text
+╭──────────────────────────────────────────────────────────────────────────╮
+│ Sonnet 5.5 · high │ 5h 31% ↻ 20:40 (1h 25m) │ Weekly 37% ↻ 10/23 01:00   │
+│ ☁ Cloudy 124k/1M ▓░░░░░░░░░ (+12k) │ Plan 3/7 ▓▓▓░░░░ ▶ Writing tests   │
+│ Model: sonnet ▾  Effort: high ▾          Resume  Rewind  Compact  Clear  │
+╰──────────────────────────────────────────────────────────────────────────╯
+```
 
-| Part | What it does |
+| Row | What it shows |
 | --- | --- |
-| Context band | Shows how full the context window is, in a weather-style forecast. |
-| Plan progress | Shows progress through the current plan. |
-| Usage limits | Shows how much of your usage limits you have used. |
-| Model picker | Switches the model from the cockpit. |
-| Effort picker | Switches the reasoning effort from the cockpit. |
-| Resume / Rewind / Compact / Clear | Buttons for the matching commands. Each asks you to confirm before it runs. |
+| 1 | The session's model and effort, then your two usage limits (5-hour and weekly) with the time each one resets. |
+| 2 | A forecast of the context window, then progress through the current plan. |
+| 3 | Model and effort pickers on the left, and the Resume / Rewind / Compact / Clear buttons on the right. |
 
-## Demo
+**Model and effort.** The model name is read from the session, for example `claude-sonnet-5-5` is shown as `Sonnet 5.5`. A `⚠` before the effort means the last request was sent with a different effort than the one you picked.
 
-<!-- TODO: one screenshot per state, with a one-line caption each -->
+**Usage limits.** Each limit shows the percent used, colored green below 70%, yellow from 70%, and red from 90%. The reset time reads `HH:MM (time left)` when it is within 24 hours, and `M/D HH:MM` after that, in your local time. If Claude Code does not report limits for your account, the limit cells are hidden.
+
+**Context forecast.** The forecast is based on how many tokens are in the context, not on the percent of the window:
+
+| Tokens in context | Forecast |
+| --- | --- |
+| under 100k | ☀ Sunny |
+| 100k – 199k | ☁ Cloudy |
+| 200k – 399k | ☂ Rain (yellow) |
+| 400k and up | ⛈ Storm (red) |
+
+Next to it are the tokens used out of the window, a 10-cell bar, and how much the last turn added, for example `(+12k)`.
+
+**Plan progress.** The mod reads the plan Claude keeps with its todo and task tools. It shows `Plan done/total`, a 7-cell bar, and the step in progress after `▶`. When every step is done it shows `✔ All done`. With no plan, this part is hidden.
+
+**Buttons.** Resume, Rewind, Compact and Clear never run on the first press. The bottom row turns into a question, for example `⚠ This clears the whole conversation. Run it?`, with Yes and No buttons. No is focused, so pressing Enter cancels. The question closes by itself after 10 seconds, when you press Esc, or when a new turn starts. A button is dimmed while Claude is working, and pressing it shows a short notice instead.
+
+**Pickers.** Press the model or effort button to open a row of choices. The current one is marked `✔`.
+
+- Model: `haiku`, `sonnet` and `opus`, limited to the ones your Claude Code offers. If the context holds 200k tokens or more, the mod asks first, because switching the model rebuilds the cache.
+- Effort: `low`, `medium`, `high`, `xhigh` and `max`.
+
+**`/cockpit-status`** prints the values the mod reads (context, limits, model, effort source, plan, and which path last worked for each action). Use it when something looks wrong.
+
+The band adapts to the space it has. With fewer rows it drops the border, then merges rows 1 and 2, then shows one line. With fewer columns it drops details in this order: step name, plan bar, context bar, last-turn change, then the reset times.
+
+<!-- IMAGE 2: 모델 또는 Effort 버튼을 눌러 선택지 행이 펼쳐진 화면. 파일명: screenshots/cockpit-picker.png -->
+![The effort picker open, with the current value marked](screenshots/cockpit-picker.png)
+
+<!-- IMAGE 3: Compact 또는 Clear 버튼을 눌러 확인 질문(Yes / No)이 뜬 화면. 파일명: screenshots/cockpit-confirm.png -->
+![Clear asks for confirmation before it runs](screenshots/cockpit-confirm.png)
 
 ## How it works
 
-The mod is one hooks module (`hooks/register.tsx`) with helpers in `hooks/lib.ts`.
+The mod is one hooks module, `hooks/register.tsx`, with pure helper functions in `hooks/lib.ts`. It makes no model calls and sends nothing over the network.
 
 | Hook | What it does |
 | --- | --- |
-| <!-- TODO --> | <!-- TODO --> |
+| `session.start` | Takes a first reading, restores your saved effort choice, starts a one-minute tick for the reset countdown, and registers `/cockpit-status`. |
+| `session.measure` | Updates the context and usage limits whenever Claude Code measures them. |
+| `turn.start` | Closes any open question or picker. Subagent turns are skipped. |
+| `turn.step` | Records the effort each request carries, and applies the effort you picked when the other paths are not available. |
+| `turn.complete` | Refreshes usage, plan and model after each main-loop turn. |
+| `command.run` with `/cockpit-status` | Answers with the diagnostic text. |
+| `command.run` with `/effort` | Treats an effort you type by hand as your new choice. |
+| `classic.SessionStart` | Reads everything again after `/clear`, `/resume` and fork. |
+| `session.end` | Clears the pending question and the usage reading on clear and resume. |
+| `ui.focus` with `{component: "AbovePrompt"}` | Closes the question and the picker when focus leaves the band. |
+| `ui.render` with `{component: "AbovePrompt"}` | Draws the band. |
 
-<!-- TODO: list the events and ui.render components the module actually uses -->
+Each button tries several ways to do its job and uses the first that works, so a change in Claude Code does not leave you with a dead button:
+
+- **Compact:** the session's compact call, then the `/compact` command, then it types `/compact` into the prompt for you to run with Enter.
+- **Clear, Resume, Rewind:** the matching command, then typing it into the prompt.
+- **Effort:** the effort setting, then the `/effort` command, then an override on your next request.
+
+If every way fails, a notice tells you the command to type yourself.
 
 ## Run it
 
 **Requirements**
 
-- Claude Code <!-- TODO: minimum version you tested on --> or later, where mods load by default.
-- A terminal. <!-- TODO: say whether other surfaces are supported -->
+- Claude Code 2.1.303 or later. `claude plugin validate` and `claude plugin test` pass on 2.1.303; older versions were not tested.
+- A terminal. The band is drawn above the prompt, on the terminal surface.
+
+No environment variables or configuration are needed.
 
 **Install from this repository**
 
@@ -53,6 +104,8 @@ Or, inside a Claude Code session:
 ```text
 /plugin install cockpit-mods --marketplace Hugo-Jang/claude-cockpit-mods
 ```
+
+Restart Claude Code, or run `/reload-plugins`, so the band appears.
 
 **Try it for one session, without installing**
 
@@ -71,10 +124,14 @@ claude plugin test ./cockpit
 
 ## Notes / limitations
 
-<!-- TODO: for example -->
-- <!-- Which numbers are exact and which are estimates -->
-- <!-- What happens when another plugin draws the same band above the prompt -->
-- <!-- Anything that resets when the session starts or the plugin reloads -->
+- **The forecast counts tokens, not percent.** On a 1M-token window, `☁ Cloudy` starts at 100k tokens, which is only 10% of the window. The bar next to it shows the percent of the window.
+- **Usage limits depend on your account.** If Claude Code does not report them, those cells are hidden instead of guessed.
+- **The plan comes from Claude's todo and task tools.** A plan that Claude only describes in text is not shown.
+- **Buttons wait for Claude.** While Claude is working they are dimmed, so a press only shows a notice.
+- **An effort picked with the override path applies from the next request**, and the mod keeps it across sessions. The other two paths apply it right away.
+- **Switching the model rebuilds the prompt cache**, so the next turn may use more tokens. That is why the mod asks first on a large context.
+- **One band per session.** Another plugin that draws above the prompt competes for the same place. The band steps aside while a Claude Code survey is showing.
+- **The text in the band is in English only.**
 
 ## Dependencies
 
