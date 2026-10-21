@@ -395,6 +395,15 @@ const planSegs = (plan: PlanSummary, opts: PlanOpts): Seg[] => {
   return segs
 }
 
+// 모델·노력 버튼이 왼쪽에 있는 1줄째의 오른쪽 부분. 폭이 모자라면 Weekly의 리셋 → 5h의 리셋과 남은 시간 순으로 뺀다.
+export const buildLimits = (limits: readonly Limit[], now: number, columns: number): Seg[] => {
+  const picked = pickLimitCells(limits)
+  const levels = picked.length === 2 ? [[true, true], [true, false], [false, false]] : [[true], [false]]
+  const rows = levels.map(resets => join(picked.map((limit, i) => limitSegs(limit, now, resets[i]!))))
+
+  return rows.find(row => segWidth(row) <= columns) ?? rows[rows.length - 1]!
+}
+
 // 폭이 모자라면 현재 단계 이름(…) → 계획 막대 → 컨텍스트 막대 → 증감 순으로 줄인다.
 export const buildRow2 = (usage: UsageView | null, plan: PlanSummary | null, columns: number): Seg[] => {
   const build = (o: { step: string | null; planBar: boolean; ctxBar: boolean; delta: boolean }): Seg[] =>
@@ -458,37 +467,42 @@ export const buildMerged = (
 export const buildMinimal = (head: HeadView, usage: UsageView | null): Seg[] =>
   join([headSegs(head), contextSegs(usage, { bar: false, delta: false })])
 
-// ── 3줄째 배치 ──
-
-export type Row3Layout = { labels: boolean; pickers: boolean; wrap: boolean }
+// ── 1·2줄째 배치 ──
 
 const BUTTON_PAD = 4
 const GAP = 1
-const MIN_SPREAD = 2
+export const MIN_SPREAD = 2
 
 // 모델·노력 버튼의 라벨. 콜론은 한 번만 찍고, 폭이 모자라면 접두어를 뺀다.
 export const pickerLabel = (name: string, value: string, withPrefix: boolean): string =>
   `${withPrefix ? `${name}: ` : ''}${value} ▾`
 
-// 폭이 모자라면 모델·노력 버튼의 접두어를 생략하고, 그래도 모자라면 버튼을 아래 행으로,
-// 행이 없으면 모델·노력 버튼을 숨긴다.
-export const layoutRow3 = (
+const pickersWidth = (pickers: readonly { name: string; value: string }[], labels: boolean): number =>
+  pickers.reduce((sum, p) => sum + textWidth(pickerLabel(p.name, p.value, labels)) + BUTTON_PAD, 0) +
+  GAP * Math.max(0, pickers.length - 1)
+
+// 2줄째 오른쪽에 놓는 동작 버튼들이 차지하는 폭.
+export const buttonsWidth = (buttons: readonly string[]): number =>
+  buttons.reduce((sum, b) => sum + textWidth(b) + BUTTON_PAD, 0) + GAP * Math.max(0, buttons.length - 1)
+
+export type Row1Layout = { labels: boolean; limits: Seg[] }
+
+// 1줄째: 모델·노력 버튼 바로 뒤에 구분선을 두고 사용량 한도를 잇는다. 한도가 없으면 구분선도 없다.
+// 폭이 모자라면 버튼 접두어를 먼저 빼고, 그래도 모자라면 한도의 리셋 표기를 줄인다.
+export const layoutRow1 = (
   pickers: readonly { name: string; value: string }[],
-  buttons: readonly string[],
+  limits: readonly Limit[],
+  now: number,
   columns: number,
-  maxRows: number,
-): Row3Layout => {
-  const right = buttons.reduce((sum, b) => sum + textWidth(b) + BUTTON_PAD, 0) + GAP * (buttons.length - 1)
-  const left = (labels: boolean): number =>
-    pickers.reduce((sum, p) => sum + textWidth(pickerLabel(p.name, p.value, labels)) + BUTTON_PAD, 0) +
-    GAP * Math.max(0, pickers.length - 1)
+): Row1Layout => {
+  const withSeparator = (row: Seg[]): Seg[] => (row.length > 0 ? [SEPARATOR, ...row] : row)
+  const full = withSeparator(buildLimits(limits, now, Number.POSITIVE_INFINITY))
+  for (const labels of [true, false]) {
+    if (segWidth(full) <= columns - pickersWidth(pickers, labels)) return { labels, limits: full }
+  }
+  const room = columns - pickersWidth(pickers, false) - segWidth([SEPARATOR])
 
-  if (pickers.length === 0) return { labels: true, pickers: false, wrap: false }
-  if (left(true) + MIN_SPREAD + right <= columns) return { labels: true, pickers: true, wrap: false }
-  if (left(false) + MIN_SPREAD + right <= columns) return { labels: false, pickers: true, wrap: false }
-  if (maxRows >= 4) return { labels: false, pickers: true, wrap: true }
-
-  return { labels: false, pickers: false, wrap: false }
+  return { labels: false, limits: withSeparator(buildLimits(limits, now, room)) }
 }
 
 // ── 계획 ──

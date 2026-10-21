@@ -5,9 +5,11 @@ import {
   STRINGS,
   asEffort,
   buildMerged,
+  buildLimits,
   buildMinimal,
   buildRow1,
   buildRow2,
+  buttonsWidth,
   contextCells,
   effortViaLabel,
   fmtDelta,
@@ -15,7 +17,7 @@ import {
   fmtStamp,
   fmtTokens,
   formatModelName,
-  layoutRow3,
+  layoutRow1,
   limitLabel,
   normalizeLimits,
   parseSavedEffort,
@@ -225,16 +227,36 @@ test('낮은 높이: 합친 한 줄과 최소 한 줄', () => {
   expect(joined(buildMinimal(HEAD, usage))).toBe('Sonnet 5.5 · medium │ ☁ Cloudy 124k/1M')
 })
 
-test('3줄째 배치: 접두어 생략, 아래 행, 모델·노력 버튼 숨김', () => {
+test('1줄째 배치: 버튼 뒤 구분선, 접두어 생략, 한도 리셋 축소', () => {
   const pickers = [
-    { name: 'Model', value: 'sonnet' },
+    { name: 'Model', value: 'Sonnet 5.5' },
     { name: 'Effort', value: 'medium' },
   ]
-  const buttons = ['Resume', 'Rewind', 'Compact', 'Clear']
-  expect(layoutRow3(pickers, buttons, 120, 10)).toEqual({ labels: true, pickers: true, wrap: false })
-  expect(layoutRow3(pickers, buttons, 80, 10)).toEqual({ labels: false, pickers: true, wrap: false })
-  expect(layoutRow3(pickers, buttons, 50, 10)).toEqual({ labels: false, pickers: true, wrap: true })
-  expect(layoutRow3(pickers, buttons, 50, 3)).toEqual({ labels: false, pickers: false, wrap: false })
+  const limits = normalizeLimits([
+    { kind: 'five_hour', percentUsed: 34, resetsAt: at(2 * H + 13 * M) },
+    { kind: 'seven_day', percentUsed: 12, resetsAt: at(4 * 24 * H) },
+  ])
+  const wide = layoutRow1(pickers, limits, NOW, 200)
+  expect(wide.labels).toBe(true)
+  expect(joined(wide.limits)).toBe(' │ 5h 34% ↻ 14:13 (2h 13m) │ Weekly 12% ↻ 10/23 12:00')
+  // 접두어를 빼면 한도가 다 들어가는 폭이면 접두어를 먼저 뺀다.
+  const noLabels = layoutRow1(pickers, limits, NOW, 85)
+  expect(noLabels.labels).toBe(false)
+  expect(joined(noLabels.limits)).toBe(' │ 5h 34% ↻ 14:13 (2h 13m) │ Weekly 12% ↻ 10/23 12:00')
+  const tiny = layoutRow1(pickers, limits, NOW, 30)
+  expect(tiny.labels).toBe(false)
+  expect(joined(tiny.limits)).toBe(' │ 5h 34% │ Weekly 12%')
+  expect(layoutRow1(pickers, [], NOW, 200)).toEqual({ labels: true, limits: [] })
+})
+
+test('1줄째 한도만 그리기: buildRow1에서 모델·노력을 뺀 모양이다', () => {
+  const limits = normalizeLimits([{ kind: 'five_hour', percentUsed: 34, resetsAt: at(2 * H) }])
+  expect(joined(buildLimits(limits, NOW, 200))).toBe('5h 34% ↻ 14:00 (2h 0m)')
+  expect(buildLimits([], NOW, 200)).toEqual([])
+})
+
+test('2줄째 오른쪽 버튼 폭', () => {
+  expect(buttonsWidth(['Resume', 'Rewind', 'Compact', 'Clear'])).toBe(6 + 6 + 7 + 5 + 4 * 4 + 3)
 })
 
 test('모델·노력 버튼 라벨은 콜론이 한 번만 나온다', () => {

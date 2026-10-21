@@ -7,17 +7,16 @@ import {
   COLORS,
   EFFORTS,
   EMPTY_EFFORT,
+  MIN_SPREAD,
   STRINGS,
   THRESHOLDS,
   asEffort,
-  buildMerged,
-  buildMinimal,
-  buildRow1,
   buildRow2,
+  buttonsWidth,
   effortViaLabel,
   fmtStamp,
   formatModelName,
-  layoutRow3,
+  layoutRow1,
   normalizeLimits,
   parseSavedEffort,
   pickModels,
@@ -544,10 +543,8 @@ export const register: Register = on => {
     const rest = await next(e)
 
     const now = await $.clock.now()
-    const maxRows = e.props.maxRows
-    // 테두리(2행)와 좌우 패딩을 쓸 수 있는 높이면 상자로 감싸고, 내용 폭은 bodyColumns - 4다.
-    const isBordered = maxRows >= 5
-    const columns = isBordered ? e.props.bodyColumns - 4 : e.props.bodyColumns
+    // 항상 테두리 상자로 감싼다. 내용 폭은 좌우 테두리와 패딩을 뺀 bodyColumns - 4다.
+    const columns = e.props.bodyColumns - 4
     const isLocked = e.props.isWorking
     const head = { model: modelName ? formatModelName(modelName) : '', effort: pickEffort(effort) }
 
@@ -569,15 +566,15 @@ export const register: Register = on => {
       else void task().catch(err => $.ui.toast(errorText(err)))
     }
 
-    const effortValue = head.effort.value ?? STRINGS.dash
+    const effortValue = `${head.effort.mismatch ? '⚠ ' : ''}${head.effort.value ?? STRINGS.dash}`
     const pickerInfo = [
-      ...(model ? [{ name: STRINGS.model, value: model.value }] : []),
+      ...(model ? [{ name: STRINGS.model, value: head.model || model.value }] : []),
       { name: STRINGS.effort, value: effortValue },
     ]
     const buttonLabels = ACTIONS.map(a => ACTION_STRINGS[a])
-    const layout = layoutRow3(pickerInfo, buttonLabels, columns, isBordered ? maxRows - 2 : maxRows)
+    const layout = layoutRow1(pickerInfo, limits, now, columns)
 
-    const pickers = layout.pickers ? (
+    const pickers = (
       <Box gap={1}>
         {pickerInfo.map(p => {
           const name = p.name === STRINGS.model ? 'model' : 'effort'
@@ -591,7 +588,7 @@ export const register: Register = on => {
           )
         })}
       </Box>
-    ) : null
+    )
 
     // 펼친 선택지 행: 현재 값에는 ✔를 붙이고, 누르면 적용하고 닫는다.
     const menuOptions = menu === 'model' ? (model ? model.options : []) : [...EFFORTS]
@@ -629,6 +626,7 @@ export const register: Register = on => {
       </Box>
     )
 
+    // 3줄째는 평소에 없고, 확인이나 선택지 행이 열려 있을 때만 생긴다.
     const row3 = confirm ? (
       <Box width={columns} justifyContent="space-between">
         <Text color={COLORS.confirm}>{`⚠ ${confirmText(confirm.kind, confirm.value)}`}</Text>
@@ -637,49 +635,30 @@ export const register: Register = on => {
           <Button key="confirm-no" label={STRINGS.no} autoFocus onPress={() => void cancelConfirm($)} />
         </Box>
       </Box>
-    ) : menuRow ? (
-      menuRow
-    ) : layout.wrap ? (
-      <Box flexDirection="column">
-        {pickers}
-        <Box width={columns} justifyContent="flex-end">
-          {buttons}
-        </Box>
-      </Box>
     ) : (
-      <Box width={columns} justifyContent={layout.pickers ? 'space-between' : 'flex-end'}>
-        {pickers}
-        {buttons}
-      </Box>
+      menuRow
     )
 
-    const tree =
-      maxRows < 2 ? (
-        <Box>{segs(buildMinimal(head, usage))}</Box>
-      ) : maxRows < 3 ? (
-        <Box flexDirection="column">
-          <Box>{segs(buildMerged(head, usage, plan, limits, now, columns))}</Box>
-          {row3}
+    // 1줄째: 모델·노력 버튼과 구분선 뒤의 사용량 한도. 2줄째: 왼쪽 컨텍스트·계획, 오른쪽 동작 버튼.
+    const tree = (
+      <Box
+        flexDirection="column"
+        borderStyle="round"
+        borderColor={COLORS.border}
+        paddingX={1}
+        width={e.props.bodyColumns}
+      >
+        <Box>
+          {pickers}
+          {segs(layout.limits)}
         </Box>
-      ) : isBordered ? (
-        <Box
-          flexDirection="column"
-          borderStyle="round"
-          borderColor={COLORS.border}
-          paddingX={1}
-          width={e.props.bodyColumns}
-        >
-          <Box>{segs(buildRow1(head, limits, now, columns))}</Box>
-          <Box>{segs(buildRow2(usage, plan, columns))}</Box>
-          {row3}
+        <Box width={columns} justifyContent="space-between">
+          <Box>{segs(buildRow2(usage, plan, columns - buttonsWidth(buttonLabels) - MIN_SPREAD))}</Box>
+          {buttons}
         </Box>
-      ) : (
-        <Box flexDirection="column">
-          <Box>{segs(buildRow1(head, limits, now, columns))}</Box>
-          <Box>{segs(buildRow2(usage, plan, columns))}</Box>
-          {row3}
-        </Box>
-      )
+        {row3}
+      </Box>
+    )
 
     return rest ? (
       <Box flexDirection="column">

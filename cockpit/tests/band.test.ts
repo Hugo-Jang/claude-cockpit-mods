@@ -117,7 +117,7 @@ const mount = ($: Engine, props: Record<string, unknown> = {}) =>
 
 const texts = async (ui: Awaited<ReturnType<typeof mount>>, type: string) => (await ui.findAll({ type })).map(f => f.text)
 
-test('3줄 밴드: 1줄째 사용량 두 칸, 2줄째 날씨와 계획, 3줄째 선택과 버튼', async ($, on) => {
+test('밴드: 1줄째 선택 버튼과 사용량 두 칸, 2줄째 날씨와 동작 버튼', async ($, on) => {
   world(on, {
     tokens: 124_000,
     limits: [
@@ -128,13 +128,12 @@ test('3줄 밴드: 1줄째 사용량 두 칸, 2줄째 날씨와 계획, 3줄째 
   await $.classic.SessionStart({ source: 'startup' } as never)
   const ui = await mount($)
   const all = (await texts(ui, 'Text')).join('')
-  expect(all).toContain('Sonnet 5.5 · -')
   expect(all).toContain('5h 34% ↻ 14:00 (2h 0m)')
   expect(all).toContain('Weekly 12% ↻ 10/23 12:00')
   expect(all).toContain('☁ Cloudy 124k/1M ▓░░░░░░░░░')
   expect((await ui.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['model-menu', 'effort-menu', 'resume', 'rewind', 'compact', 'clear'])
   expect((await ui.findAll({ type: 'Button' })).slice(2).map(b => b.text)).toEqual(['Resume', 'Rewind', 'Compact', 'Clear'])
-  expect(await ui.find({ type: 'Button', key: 'model-menu' })).toBeDefined()
+  expect((await ui.find({ type: 'Button', key: 'model-menu' }))?.text).toBe('Model: Sonnet 5.5 ▾')
   expect(await ui.find({ type: 'Button', key: 'effort-menu' })).toBeDefined()
   for (const b of await ui.findAll({ type: 'Button' })) expect(b.props.hotkey).toBeUndefined()
 })
@@ -176,7 +175,7 @@ test('계획은 messages의 toolUses에서 만든다', async ($, on) => {
   expect(all).toContain('Plan 1/2 ▓▓▓▓░░░ ▶ Doing b')
 })
 
-test('확인: No는 실행 없이 되돌리고, 확인 중에는 3줄째만 바뀐다', async ($, on) => {
+test('확인: No는 실행 없이 되돌리고, 확인 중에는 버튼은 그대로 두고 줄만 하나 더해진다', async ($, on) => {
   const { log } = world(on, { tokens: 124_000 })
   await $.classic.SessionStart({ source: 'startup' } as never)
   const ui = await mount($)
@@ -184,7 +183,7 @@ test('확인: No는 실행 없이 되돌리고, 확인 중에는 3줄째만 바�
 
   await ui.press({ key: 'clear' })
   expect(await ui.find({ type: 'Text', text: '⚠ This clears the whole conversation. Run it?' })).toBeDefined()
-  expect(await ui.find({ type: 'Button', key: 'clear' })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', key: 'clear' })).toBeDefined()
   const yes = await ui.find({ type: 'Button', key: 'confirm-yes' })
   const no = await ui.find({ type: 'Button', key: 'confirm-no' })
   expect(yes?.text).toBe('Yes')
@@ -298,12 +297,14 @@ test('작업 중에는 버튼이 흐리게 보이고 눌러도 실행하지 않�
 
 const joinedText = async (ui: Awaited<ReturnType<typeof mount>>) => (await texts(ui, 'Text')).join('')
 
+const effortText = async (ui: Awaited<ReturnType<typeof mount>>) => (await ui.find({ key: 'effort-menu' }))?.text
+
 test('모델·노력은 Select가 아니라 Button이고 라벨의 콜론은 한 번만 나온다', async ($, on) => {
   world(on, { tokens: 1_000 })
   await $.classic.SessionStart({ source: 'startup' } as never)
   const ui = await mount($)
   expect(await ui.find({ type: 'Select' })).toBeUndefined()
-  expect((await ui.find({ type: 'Button', key: 'model-menu' }))?.text).toBe('Model: sonnet ▾')
+  expect((await ui.find({ type: 'Button', key: 'model-menu' }))?.text).toBe('Model: Sonnet 5.5 ▾')
   expect((await ui.find({ type: 'Button', key: 'effort-menu' }))?.text).toBe('Effort: - ▾')
   expect(await ui.find({ type: 'Button', text: /::/ })).toBeUndefined()
 })
@@ -327,7 +328,7 @@ const requestStep = async ($: Engine, effort: string, agentId?: string) => {
   for await (const chunk of stream) void chunk
 }
 
-test('노력 버튼: 누르면 3줄째가 선택지 행으로 바뀌고, 고르면 적용하고 닫는다', async ($, on) => {
+test('노력 버튼: 누르면 아래에 선택지 행이 더해지고, 고르면 적용하고 닫는다', async ($, on) => {
   world(on, { tokens: 1_000 })
   await $.classic.SessionStart({ source: 'startup' } as never)
   const ui = await mount($)
@@ -335,7 +336,7 @@ test('노력 버튼: 누르면 3줄째가 선택지 행으로 바뀌고, 고르�
 
   await ui.press({ key: 'effort-menu' })
   expect(await ui.find({ type: 'Text', text: 'Effort ▸' })).toBeDefined()
-  expect((await ui.findAll({ type: 'Button' })).map(b => b.text)).toEqual([
+  expect((await ui.findAll({ type: 'Button' })).slice(6).map(b => b.text)).toEqual([
     'low',
     'medium',
     'high',
@@ -343,20 +344,20 @@ test('노력 버튼: 누르면 3줄째가 선택지 행으로 바뀌고, 고르�
     'max',
     'Close',
   ])
-  expect(await ui.find({ key: 'compact' })).toBeUndefined()
+  expect(await ui.find({ key: 'compact' })).toBeDefined()
   expect((await texts(ui, 'Text')).slice(0, 5)).toEqual(before)
 
   await ui.press({ key: 'effort-opt-high' })
   expect(await ui.find({ key: 'effort-opt-high' })).toBeUndefined()
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · high')
-  expect(await joinedText(ui)).not.toContain('⚠')
+  expect(await effortText(ui)).toBe('Effort: high ▾')
+  expect(await effortText(ui)).not.toContain('⚠')
 
   await ui.press({ key: 'effort-menu' })
   expect((await ui.find({ key: 'effort-opt-high' }))?.text).toBe('high ✔')
   expect((await ui.find({ key: 'effort-opt-low' }))?.text).toBe('low')
   await ui.press({ key: 'menu-close' })
   expect(await ui.find({ key: 'menu-close' })).toBeUndefined()
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · high')
+  expect(await effortText(ui)).toBe('Effort: high ▾')
 })
 
 test('선택지 행: 10초, 새 턴, resume으로 끝날 때 아무것도 바꾸지 않고 닫힌다', async ($, on) => {
@@ -378,7 +379,7 @@ test('선택지 행: 10초, 새 턴, resume으로 끝날 때 아무것도 바꾸
   await $.session.end({ reason: 'resume', sessionId: 's1', resume: { id: 's1' } } as never)
   await ui.redraw()
   expect(await ui.find({ key: 'menu-close' })).toBeUndefined()
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · -')
+  expect(await effortText(ui)).toBe('Effort: - ▾')
   expect(log.sets).toEqual([])
 })
 
@@ -390,7 +391,7 @@ test('노력 적용 경로 2: 설정 행이 없으면 내장 /effort를 값과 �
   expect(log.commands).toEqual(['effort high'])
   expect(log.sets).toEqual([])
   expect(log.toasts).toEqual(['Effort set to high.'])
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · high')
+  expect(await effortText(ui)).toBe('Effort: high ▾')
   expect(await joinedText(ui)).not.toContain('⚠')
   const out = await $.command.run({ command: 'cockpit-status' } as never)
   expect(out.text).toContain('Effort: command.run')
@@ -418,7 +419,7 @@ test('노력 적용 경로 3: 앞의 경로가 모두 실패하면 다음 요청
   const ui = await mount($)
   await chooseEffort(ui, 'high')
   expect(log.toasts).toEqual(['Applies from the next request.'])
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · high')
+  expect(await effortText(ui)).toBe('Effort: high ▾')
   expect(await joinedText(ui)).not.toContain('⚠')
   const out = await $.command.run({ command: 'cockpit-status' } as never)
   expect(out.text).toContain('Effort: turn.step')
@@ -429,7 +430,7 @@ test('노력 적용 경로 3: 앞의 경로가 모두 실패하면 다음 요청
   await requestStep($, 'medium')
   await ui.redraw()
   expect(log.sent).toEqual(['high'])
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · high')
+  expect(await effortText(ui)).toBe('Effort: high ▾')
   expect(await joinedText(ui)).not.toContain('⚠')
 })
 
@@ -437,7 +438,7 @@ test('노력: 저장된 선택값은 시각과 함께 /clear 뒤 세션 시작�
   world(on, { tokens: 1_000 }, { effort: { value: 'max', at: NOW - 1_000 } })
   await $.classic.SessionStart({ source: 'clear' } as never)
   const ui = await mount($)
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · max')
+  expect(await effortText(ui)).toBe('Effort: max ▾')
   const out = await $.command.run({ command: 'cockpit-status' } as never)
   expect(out.text).toContain('selection=max at 10/19 11:59:59')
 })
@@ -446,11 +447,11 @@ test('노력: 시작 직후에는 -이고 선택이 없으면 마지막 메인 �
   world(on, { tokens: 1_000 })
   await $.classic.SessionStart({ source: 'startup' } as never)
   const ui = await mount($)
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · -')
+  expect(await effortText(ui)).toBe('Effort: - ▾')
 
   await requestStep($, 'medium')
   await ui.redraw()
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · medium')
+  expect(await effortText(ui)).toBe('Effort: medium ▾')
   expect(await joinedText(ui)).not.toContain('⚠')
   const out = await $.command.run({ command: 'cockpit-status' } as never)
   expect(out.text).toContain('effort: shown=medium source=last request')
@@ -462,26 +463,26 @@ test('⚠: 선택 직후 요청 전에는 없고, 같은 값의 요청이면 없
   await $.classic.SessionStart({ source: 'startup' } as never)
   const ui = await mount($)
   await chooseEffort(ui, 'high')
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · high')
+  expect(await effortText(ui)).toBe('Effort: high ▾')
   expect(await joinedText(ui)).not.toContain('⚠')
 
   await clock.advance(1_000)
   await requestStep($, 'high')
   await ui.redraw()
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · high')
+  expect(await effortText(ui)).toBe('Effort: high ▾')
   expect(await joinedText(ui)).not.toContain('⚠')
 
   await clock.advance(1_000)
   await requestStep($, 'low')
   await ui.redraw()
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · ⚠ high')
+  expect(await effortText(ui)).toBe('Effort: ⚠ high ▾')
   // 이 경로(config가 아닌 /effort 실행)는 덮어쓰지 않으므로 엔진의 값이 그대로 나간다.
   expect(log.sent).toEqual(['high', 'low'])
 
   await clock.advance(1_000)
   await requestStep($, 'high')
   await ui.redraw()
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · high')
+  expect(await effortText(ui)).toBe('Effort: high ▾')
   expect(await joinedText(ui)).not.toContain('⚠')
 })
 
@@ -492,17 +493,17 @@ test('⚠: 선택 이전의 요청은 무시하고, 새로 고르면 ⚠가 사�
   await requestStep($, 'low')
   await clock.advance(1_000)
   await chooseEffort(ui, 'high')
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · high')
+  expect(await effortText(ui)).toBe('Effort: high ▾')
   expect(await joinedText(ui)).not.toContain('⚠')
 
   await clock.advance(1_000)
   await requestStep($, 'low')
   await ui.redraw()
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · ⚠ high')
+  expect(await effortText(ui)).toBe('Effort: ⚠ high ▾')
 
   await clock.advance(1_000)
   await chooseEffort(ui, 'low')
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · low')
+  expect(await effortText(ui)).toBe('Effort: low ▾')
   expect(await joinedText(ui)).not.toContain('⚠')
 })
 
@@ -513,7 +514,7 @@ test('서브에이전트(agentId 있음) 요청은 기록하지도 덮어쓰지�
   const ui = await mount($)
   await requestStep($, 'low', 'agent-1')
   await ui.redraw()
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · -')
+  expect(await effortText(ui)).toBe('Effort: - ▾')
 
   await chooseEffort(ui, 'high')
   await clock.advance(1_000)
@@ -536,7 +537,7 @@ test('내장 /effort를 직접 입력하면 그 값이 새 선택값이 되고 �
   await clock.advance(1_000)
   await $.command.run({ command: 'effort', args: 'low' } as never)
   await ui.redraw()
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · low')
+  expect(await effortText(ui)).toBe('Effort: low ▾')
   expect(await joinedText(ui)).not.toContain('⚠')
   const out = await $.command.run({ command: 'cockpit-status' } as never)
   expect(out.text).toContain('effort: shown=low source=selection')
@@ -546,7 +547,7 @@ test('내장 /effort를 직접 입력하면 그 값이 새 선택값이 되고 �
   await clock.advance(1_000)
   await requestStep($, 'high')
   await ui.redraw()
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · ⚠ low')
+  expect(await effortText(ui)).toBe('Effort: ⚠ low ▾')
   expect(log.commands).toEqual(['effort high', 'effort low'])
 })
 
@@ -557,7 +558,7 @@ test('내장 /effort에 허용되지 않은 인자를 넣으면 선택값은 그
   await chooseEffort(ui, 'high')
   await $.command.run({ command: 'effort', args: 'turbo' } as never)
   await ui.redraw()
-  expect(await joinedText(ui)).toContain('Sonnet 5.5 · high')
+  expect(await effortText(ui)).toBe('Effort: high ▾')
 })
 
 test('모델 버튼: 선택지는 config 행의 options에서 읽고, 현재 값에 ✔가 붙는다', async ($, on) => {
@@ -566,20 +567,20 @@ test('모델 버튼: 선택지는 config 행의 options에서 읽고, 현재 값
   const ui = await mount($)
   await ui.press({ key: 'model-menu' })
   expect(await ui.find({ type: 'Text', text: 'Model ▸' })).toBeDefined()
-  expect((await ui.findAll({ type: 'Button' })).map(b => b.text)).toEqual(['haiku', 'sonnet ✔', 'opus', 'Close'])
+  expect((await ui.findAll({ type: 'Button' })).slice(6).map(b => b.text)).toEqual(['haiku', 'sonnet ✔', 'opus', 'Close'])
   await ui.press({ key: 'model-opt-haiku' })
   expect(log.sets).toEqual(['model=haiku'])
   expect(await ui.find({ key: 'confirm-yes' })).toBeUndefined()
   expect(await ui.find({ key: 'menu-close' })).toBeUndefined()
 })
 
-test('모델 버튼: 현재 값이 세 별칭에 없으면 버튼에는 보이지만 선택지에는 넣지 않고, 별칭을 그대로 설정한다', async ($, on) => {
+test('모델 버튼: 현재 값이 세 별칭에 없어도 버튼에는 실제 모델명이 보이고 선택지에는 넣지 않으며, 별칭을 그대로 설정한다', async ($, on) => {
   const { log } = world(on, { tokens: 10_000, model: 'default' })
   await $.classic.SessionStart({ source: 'startup' } as never)
   const ui = await mount($)
-  expect((await ui.find({ key: 'model-menu' }))?.text).toBe('Model: default ▾')
+  expect((await ui.find({ key: 'model-menu' }))?.text).toBe('Model: Sonnet 5.5 ▾')
   await ui.press({ key: 'model-menu' })
-  expect((await ui.findAll({ type: 'Button' })).map(b => b.text)).toEqual(['haiku', 'sonnet', 'opus', 'Close'])
+  expect((await ui.findAll({ type: 'Button' })).slice(6).map(b => b.text)).toEqual(['haiku', 'sonnet', 'opus', 'Close'])
   await ui.press({ key: 'model-opt-sonnet' })
   expect(log.sets).toEqual(['model=sonnet'])
 })
@@ -595,11 +596,11 @@ test('테두리: 높이가 5 이상이면 둥근 상자로 감싸고 내용 폭�
   expect((await ui.findAll({ type: 'Box' })).some(b => b.props.width === PROPS.bodyColumns - 4)).toBe(true)
 })
 
-test('테두리: 높이가 5 미만이면 테두리 없이 3줄로 그린다', async ($, on) => {
+test('테두리: 높이가 작아도 항상 테두리 상자로 그린다', async ($, on) => {
   world(on, { tokens: 124_000 })
   await $.classic.SessionStart({ source: 'startup' } as never)
   const ui = await mount($, { maxRows: 4 })
-  for (const box of await ui.findAll({ type: 'Box' })) expect(box.props.borderStyle).toBeUndefined()
+  expect((await ui.findAll({ type: 'Box' })).some(b => b.props.borderStyle === 'round')).toBe(true)
   expect((await ui.findAll({ type: 'Button' })).length).toBe(6)
   expect((await texts(ui, 'Text')).join('')).toContain('☁ Cloudy')
 })
@@ -647,42 +648,35 @@ test('작업 중에는 모델·노력 버튼도 흐리게 보이고 눌러도 �
   expect(log.toasts).toContain('Claude is working. Try again when it finishes.')
 })
 
-test('폭과 높이: 좁으면 접두어를 줄이고, 낮으면 합치고, 더 낮으면 한 줄만 그린다', async ($, on) => {
+test('폭과 높이: 좁으면 접두어를 줄이고, 높이와 상관없이 같은 모양이다', async ($, on) => {
   world(on, { tokens: 124_000 })
   await $.classic.SessionStart({ source: 'startup' } as never)
 
   const wide = await mount($)
-  expect((await wide.find({ key: 'model-menu' }))?.text).toBe('Model: sonnet ▾')
+  expect((await wide.find({ key: 'model-menu' }))?.text).toBe('Model: Sonnet 5.5 ▾')
 
   const narrow = await $.ui.mount({
     plugin: 'cockpit-mods',
     surface: 'terminal',
     component: 'AbovePrompt',
-    props: { ...PROPS, bodyColumns: 70 } as never,
+    props: { ...PROPS, bodyColumns: 40 } as never,
     requestId: 'narrow',
   })
-  expect((await narrow.find({ key: 'model-menu' }))?.text).toBe('sonnet ▾')
+  expect((await narrow.find({ key: 'model-menu' }))?.text).toBe('Sonnet 5.5 ▾')
   expect((await narrow.findAll({ type: 'Button' })).slice(2).map(b => b.text)).toEqual(['Resume', 'Rewind', 'Compact', 'Clear'])
 
-  const short = await $.ui.mount({
-    plugin: 'cockpit-mods',
-    surface: 'terminal',
-    component: 'AbovePrompt',
-    props: { ...PROPS, maxRows: 2 } as never,
-    requestId: 'short',
-  })
-  expect((await short.findAll({ type: 'Button' })).length).toBe(6)
-  expect((await texts(short, 'Text')).join('')).toContain('Sonnet 5.5 · - │ ☁ Cloudy 124k/1M')
-
-  const tiny = await $.ui.mount({
-    plugin: 'cockpit-mods',
-    surface: 'terminal',
-    component: 'AbovePrompt',
-    props: { ...PROPS, maxRows: 1 } as never,
-    requestId: 'tiny',
-  })
-  expect((await tiny.findAll({ type: 'Button' })).length).toBe(0)
-  expect((await texts(tiny, 'Text')).join('')).toBe('Sonnet 5.5 · - │ ☁ Cloudy 124k/1M')
+  for (const maxRows of [4, 2, 1]) {
+    const short = await $.ui.mount({
+      plugin: 'cockpit-mods',
+      surface: 'terminal',
+      component: 'AbovePrompt',
+      props: { ...PROPS, maxRows } as never,
+      requestId: `short${maxRows}`,
+    })
+    expect((await short.findAll({ type: 'Button' })).length).toBe(6)
+    expect((await short.findAll({ type: 'Box' })).some(x => x.props.borderStyle === 'round')).toBe(true)
+    expect((await texts(short, 'Text')).join('')).toContain('☁ Cloudy 124k/1M')
+  }
 })
 
 test('설문이 떠 있으면 아무것도 그리지 않는다', async ($, on) => {
