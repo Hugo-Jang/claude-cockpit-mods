@@ -1,7 +1,7 @@
 {
   "name": "cockpit-mods",
-  "version": "1.1.0",
-  "description": "Weather-style context band, plan progress, usage limits, model and effort pickers, and confirmed Resume/Rewind/Compact/Clear buttons",
+  "version": "1.2.0",
+  "description": "Weather-style context band, a progress bar for step-by-step work, usage limits, model and effort pickers, and confirmed Resume/Rewind/Compact/Clear buttons",
   "author": {
     "name": "Hugo-Jang",
     "url": "https://github.com/Hugo-Jang"

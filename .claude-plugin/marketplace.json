@@ -10,7 +10,7 @@
     {
       "name": "cockpit-mods",
       "source": "./cockpit",
-      "description": "Weather-style context band, plan progress, usage limits, model and effort pickers, and confirmed Resume/Rewind/Compact/Clear buttons."
+      "description": "Weather-style context band, a progress bar for step-by-step work, usage limits, model and effort pickers, and confirmed Resume/Rewind/Compact/Clear buttons."
     }
   ]
 }

@@ -148,31 +148,48 @@ test('컨텍스트를 못 읽으면 No data, 한도가 없으면 사용량 칸�
   expect(all).not.toContain('5h')
 })
 
-test('계획은 messages의 toolUses에서 만든다', async ($, on) => {
+test('계획은 messages의 progress 호출에서 만든다', async ($, on) => {
   world(on, {
     tokens: 50_000,
     messages: [
       {
         role: 'assistant',
         text: '',
-        toolUses: [
-          {
-            tool: 'TodoWrite',
-            input: {
-              todos: [
-                { content: 'a', status: 'completed' },
-                { content: 'b', activeForm: 'Doing b', status: 'in_progress' },
-              ],
-            },
-          },
-        ] as never,
+        toolUses: [{ tool: 'mcp__cockpit-mods__progress', input: { done: 1, total: 2 } }] as never,
       },
     ],
   })
   await $.classic.SessionStart({ source: 'startup' } as never)
   const ui = await mount($)
   const all = (await texts(ui, 'Text')).join('')
-  expect(all).toContain('Plan 1/2 ▓▓▓▓░░░ ▶ Doing b')
+  expect(all).toContain('Plan 1/2 ▓▓▓▓░░░')
+  expect(all).not.toContain('▶')
+  const bar = await ui.find({ type: 'Text', text: '▓▓▓▓' })
+  expect(bar?.props.color).toBe('#e8e06a')
+})
+
+test('progress 도구를 호출하면 바로 Plan이 바뀐다', async ($, on) => {
+  world(on, { tokens: 50_000 })
+  const out = await $.tool.call({ tool: 'mcp__cockpit-mods__progress', done: 2, total: 4 } as never)
+  expect((out as { result: unknown }).result).toBe('2/4')
+  const ui = await mount($)
+  expect((await texts(ui, 'Text')).join('')).toContain('Plan 2/4')
+})
+
+test('todo 도구는 Plan에 쓰이지 않는다', async ($, on) => {
+  world(on, {
+    tokens: 50_000,
+    messages: [
+      {
+        role: 'assistant',
+        text: '',
+        toolUses: [{ tool: 'TodoWrite', input: { todos: [{ content: 'a', status: 'completed' }] } }] as never,
+      },
+    ],
+  })
+  await $.classic.SessionStart({ source: 'startup' } as never)
+  const ui = await mount($)
+  expect((await texts(ui, 'Text')).join('')).not.toContain('Plan')
 })
 
 test('확인: No는 실행 없이 되돌리고, 확인 중에는 버튼은 그대로 두고 줄만 하나 더해진다', async ($, on) => {
@@ -591,7 +608,7 @@ test('테두리: 높이가 5 이상이면 둥근 상자로 감싸고 내용 폭�
   const ui = await mount($)
   const outer = (await ui.findAll({ type: 'Box' })).find(b => b.props.borderStyle === 'round')
   expect(outer?.props.borderStyle).toBe('round')
-  expect(outer?.props.borderColor).toBe('cyan')
+  expect(outer?.props.borderColor).toBe('#f0a35e')
   expect(outer?.props.paddingX).toBe(1)
   expect((await ui.findAll({ type: 'Box' })).some(b => b.props.width === PROPS.bodyColumns - 4)).toBe(true)
 })

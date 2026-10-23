@@ -25,6 +25,8 @@ import {
   pickerLabel,
   pickLimitCells,
   planCells,
+  planColor,
+  PROGRESS_TOOL,
   rateColor,
   reconstructPlan,
   runChain,
@@ -121,10 +123,10 @@ test('한도 정렬과 라벨', () => {
 })
 
 test('사용률 색 경계', () => {
-  expect(rateColor(69.9)).toBe('green')
-  expect(rateColor(70)).toBe('yellow')
-  expect(rateColor(89)).toBe('yellow')
-  expect(rateColor(90)).toBe('red')
+  expect(rateColor(69.9)).toBe('#8fd694')
+  expect(rateColor(70)).toBe('#e8e06a')
+  expect(rateColor(89)).toBe('#e8e06a')
+  expect(rateColor(90)).toBe('#ef6f6f')
   expect(rateColor(null)).toBeUndefined()
 })
 
@@ -136,7 +138,7 @@ test('1줄째: 두 칸, 반올림, 없는 값은 -', () => {
   const row = buildRow1(HEAD, limits, NOW, 200)
   expect(joined(row)).toBe('Sonnet 5.5 · medium │ 5h 34% ↻ 14:13 (2h 13m) │ Weekly 12% ↻ 10/23 12:00')
   const pct = row.find(s => s.text === '34%')
-  expect(pct?.color).toBe('green')
+  expect(pct?.color).toBe('#8fd694')
 
   const partial = normalizeLimits([{ kind: 'five_hour', percentUsed: undefined, resetsAt: undefined }])
   expect(joined(buildRow1(HEAD, partial, NOW, 200))).toBe('Sonnet 5.5 · medium │ 5h - ↻ -')
@@ -182,7 +184,7 @@ test('2줄째: 평상시, 경고, 위험', () => {
   expect(storm[0]?.color).toBe('red')
 })
 
-test('2줄째: No data, 계획 숨김, All done, 증감 생략', () => {
+test('2줄째: No data, 계획 숨김, 완료 ✔, 증감 생략', () => {
   expect(joined(buildRow2(null, null, 200))).toBe('☁ No data')
   expect(joined(buildRow2({ tokens: null, window: 1_000_000, percent: null, delta: null }, null, 200))).toBe('☁ No data')
   expect(joined(buildRow2({ tokens: 124_000, window: 1_000_000, percent: 12, delta: null }, null, 200))).toBe(
@@ -190,7 +192,7 @@ test('2줄째: No data, 계획 숨김, All done, 증감 생략', () => {
   )
   expect(
     joined(buildRow2({ tokens: 124_000, window: 1_000_000, percent: 12, delta: 0 }, { done: 7, total: 7, current: null }, 200)),
-  ).toBe('☁ Cloudy 124k/1M ▓░░░░░░░░░ │ Plan 7/7 ▓▓▓▓▓▓▓ ✔ All done')
+  ).toBe('☁ Cloudy 124k/1M ▓░░░░░░░░░ │ Plan 7/7 ▓▓▓▓▓▓▓ ✔')
 })
 
 test('2줄째: 폭이 모자라면 단계 이름 → 계획 막대 → 컨텍스트 막대 → 증감 순으로 줄인다', () => {
@@ -265,41 +267,32 @@ test('모델·노력 버튼 라벨은 콜론이 한 번만 나온다', () => {
   expect(pickerLabel('Model', 'sonnet', true).match(/:/g)).toHaveLength(1)
 })
 
-test('계획 계산', () => {
-  const todo = (todos: object[]) => [{ toolUses: [{ tool: 'TodoWrite', input: { todos } }] }]
-  expect(reconstructPlan([])).toBeNull()
-  expect(
-    reconstructPlan(
-      todo([
-        { content: 'a', status: 'completed' },
-        { content: 'b', activeForm: 'Doing b', status: 'in_progress' },
-        { content: 'c', status: 'pending' },
-      ]),
-    ),
-  ).toEqual({ done: 1, total: 3, current: 'Doing b' })
-  expect(
-    reconstructPlan(
-      todo([
-        { content: 'a', status: 'completed' },
-        { content: 'c', status: 'pending' },
-      ]),
-    )?.current,
-  ).toBe('c')
-  expect(reconstructPlan(todo([{ content: 'a', status: 'completed' }]))).toEqual({ done: 1, total: 1, current: null })
+test('계획 막대 색: 1~33 주황, 34~66 노랑, 67~99 연두, 완료 초록', () => {
+  expect(planColor(0, 3)).toBe('#f0a35e')
+  expect(planColor(1, 6)).toBe('#f0a35e')
+  expect(planColor(1, 3)).toBe('#e8e06a')
+  expect(planColor(3, 6)).toBe('#e8e06a')
+  expect(planColor(2, 3)).toBe('#b5da74')
+  expect(planColor(5, 6)).toBe('#b5da74')
+  expect(planColor(3, 3)).toBe('#8fd694')
+  expect(planColor(9, 3)).toBe('#8fd694')
+})
 
-  const tasks = [
-    {
-      toolUses: [
-        { tool: 'TaskCreate', input: { subject: 'one' }, result: { task: { id: '1' } } },
-        { tool: 'TaskCreate', input: { subject: 'two' }, result: { task: { id: '2' } } },
-        { tool: 'TaskCreate', input: { subject: 'three' }, result: { task: { id: '3' } } },
-        { tool: 'TaskUpdate', input: { taskId: '1', status: 'completed' } },
-        { tool: 'TaskUpdate', input: { taskId: '2', status: 'in_progress', activeForm: 'Working two' } },
-        { tool: 'TaskUpdate', input: { taskId: '3', status: 'deleted' } },
-      ],
-    },
-  ]
-  expect(reconstructPlan(tasks)).toEqual({ done: 1, total: 2, current: 'Working two' })
+test('계획 계산', () => {
+  const call = (input: object) => [{ toolUses: [{ tool: PROGRESS_TOOL, input }] }]
+  expect(reconstructPlan([])).toBeNull()
+  expect(reconstructPlan(call({ done: 1, total: 3 }))).toEqual({ done: 1, total: 3, current: null })
+  expect(reconstructPlan(call({ done: 9, total: 3 }))).toEqual({ done: 3, total: 3, current: null })
+  expect(reconstructPlan(call({ done: 'x', total: 3 }))).toBeNull()
+  expect(reconstructPlan(call({ done: 0, total: 0 }))).toBeNull()
+  // 마지막 호출이 이긴다. todo 도구는 더 이상 읽지 않는다.
+  expect(
+    reconstructPlan([
+      { toolUses: [{ tool: PROGRESS_TOOL, input: { done: 1, total: 3 } }] },
+      { toolUses: [{ tool: 'TodoWrite', input: { todos: [{ content: 'a', status: 'completed' }] } }] },
+      { toolUses: [{ tool: PROGRESS_TOOL, input: { done: 2, total: 3 } }] },
+    ]),
+  ).toEqual({ done: 2, total: 3, current: null })
 })
 
 const SELECTION = { value: 'high', at: 10, via: 'command.run' }

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.0 - 2026-10-23
+
+### Changed
+- The `Plan n/m` bar on line 2 is now read from a `progress(done, total)` tool that the mod registers, not from
+  TodoWrite / TaskCreate / TaskUpdate. No step name is shown. The tool call stores the value at once, so the bar
+  does not wait for `turn.complete`.
+- The plan bar changes color with progress: orange (1-33%), yellow (34-66%), light green (67-99%), green (done).
+- When all steps are done, only a bold green `✔` is shown (no "All done" text).
+- The band border is orange, and the usage limits use softer green / yellow / red. The context weather colors
+  and the picker colors are unchanged.
+
 ## 1.1.0 - 2026-10-21
 
 ### Changed

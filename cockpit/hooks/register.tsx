@@ -22,6 +22,7 @@ import {
   pickModels,
   pickEffort,
   pickerLabel,
+  planFromInput,
   reconstructPlan,
   runChain,
   text,
@@ -421,6 +422,17 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await restoreSelection($)
     await refresh($)
+    await $.tool.register({
+      name: 'progress',
+      description:
+        '진행 막대 표시. 사용자가 "단계별"·"하나씩"·"진행률"을 말하거나 3단계 이상 작업이면 작업 전에 progress(0,총단계)를 먼저 호출하고, 단계가 끝날 때마다 progress(완료수,총단계)를 호출한다. 생략 금지.',
+      isDeferred: false,
+      inputSchema: {
+        type: 'object',
+        properties: { done: { type: 'integer' }, total: { type: 'integer' } },
+        required: ['done', 'total'],
+      },
+    })
     ticker?.cancel()
     ticker = $.clock.every(60_000, () => {
       void update($, tickAtom, n => n + 1).catch(() => undefined)
@@ -432,6 +444,14 @@ export const register: Register = on => {
     }
 
     return next(e)
+  })
+
+  // 다른 이벤트가 건너뛰어져도 값이 바로 남도록, 도구 호출에서 계획을 직접 저장한다.
+  on('tool.call', { tool: 'mcp__cockpit-mods__progress' }, async ($, e, next) => {
+    const plan = planFromInput(e as unknown as Record<string, unknown>)
+    await update($, planAtom, () => plan)
+
+    return { result: plan ? `${plan.done}/${plan.total}` : 'invalid' }
   })
 
   on('session.measure', async ($, e, next) => {

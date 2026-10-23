@@ -13,14 +13,15 @@ export const THRESHOLDS = {
 export const COLORS = {
   rain: 'yellow',
   storm: 'red',
-  ok: 'green',
-  warn: 'yellow',
-  danger: 'red',
+  ok: '#8fd694',
+  warn: '#e8e06a',
+  danger: '#ef6f6f',
   effort: 'cyan',
-  planBar: 'cyan',
+  // 계획 막대: 진행률 1~33% / 34~66% / 67~99% / 완료 순서
+  planStages: ['#f0a35e', '#e8e06a', '#b5da74', '#8fd694'],
   confirm: 'yellow',
   mismatch: 'yellow',
-  border: 'cyan',
+  border: '#f0a35e',
 } as const
 
 // 타입 정의의 turn.step effort 문자열 값만 쓴다.
@@ -39,7 +40,7 @@ export const STRINGS = {
   limit5h: '5h',
   limitWeekly: 'Weekly',
   plan: 'Plan',
-  allDone: '✔ All done',
+  allDone: '✔',
   working: 'Claude is working. Try again when it finishes.',
   model: 'Model',
   effort: 'Effort',
@@ -159,6 +160,15 @@ export const planCells = (done: number, total: number): number => {
   if (total <= 0 || done <= 0) return 0
   if (done >= total) return 7
   return Math.min(6, Math.max(1, Math.round((done / total) * 7)))
+}
+
+// 계획 막대 색: 컨텍스트와 반대로 끝에 가까울수록 좋은 상태라 주황에서 초록으로 간다.
+export const planColor = (done: number, total: number): string => {
+  const stages = COLORS.planStages
+  if (total > 0 && done >= total) return stages[3]
+  const index = total > 0 ? Math.min(2, Math.max(0, Math.floor((done / total) * 3))) : 0
+
+  return stages[index]!
 }
 
 export const barText = (filled: number, width: number): { on: string; off: string } => ({
@@ -388,9 +398,12 @@ const planSegs = (plan: PlanSummary, opts: PlanOpts): Seg[] => {
   const segs: Seg[] = [{ text: `${STRINGS.plan} ${plan.done}/${plan.total}` }]
   if (opts.bar) {
     const bar = barText(planCells(plan.done, plan.total), 7)
-    segs.push({ text: ' ' }, { text: bar.on, color: COLORS.planBar }, { text: bar.off, dim: true })
+    segs.push({ text: ' ' }, { text: bar.on, color: planColor(plan.done, plan.total) }, { text: bar.off, dim: true })
   }
-  if (opts.step) segs.push({ text: ' ' }, { text: opts.step, bold: true })
+  if (opts.step) {
+    const isDone = opts.step === STRINGS.allDone
+    segs.push({ text: ' ' }, isDone ? { text: opts.step, bold: true, color: COLORS.ok } : { text: opts.step, bold: true })
+  }
 
   return segs
 }
@@ -507,63 +520,32 @@ export const layoutRow1 = (
 
 // ── 계획 ──
 
-type Item = { id?: string; title: string; active: string; status: string }
+export const PROGRESS_TOOL = 'mcp__cockpit-mods__progress'
+
 type ToolUseLike = { tool: string; input: Record<string, unknown>; result?: unknown }
 type MessageLike = { toolUses: readonly ToolUseLike[] }
 
-const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+// progress(done,total) 입력을 계획으로 바꾼다. 값이 올바르지 않으면 null.
+export const planFromInput = (input: Record<string, unknown>): PlanSummary | null => {
+  const done = input.done
+  const total = input.total
+  if (typeof done !== 'number' || typeof total !== 'number') return null
+  if (!Number.isInteger(done) || !Number.isInteger(total) || total <= 0 || done < 0) return null
 
-// TodoWrite는 목록 전체를 덮어쓰고, TaskCreate/TaskUpdate는 누적한다. 마지막으로 쓰인 쪽을 계획으로 본다.
+  return { done: Math.min(done, total), total, current: null }
+}
+
+// 마지막 progress 호출을 계획으로 본다. 호출한 적이 없거나 마지막 값이 올바르지 않으면 null.
 export const reconstructPlan = (messages: readonly MessageLike[]): PlanSummary | null => {
-  let todos: Item[] = []
-  let tasks: Item[] = []
-  let created = 0
-  let last: 'todo' | 'task' | null = null
+  let plan: PlanSummary | null = null
 
   for (const message of messages) {
     for (const use of message.toolUses) {
-      if (use.tool === 'TodoWrite' && Array.isArray(use.input.todos)) {
-        todos = (use.input.todos as Record<string, unknown>[]).map(t => ({
-          title: str(t.content) || str(t.subject),
-          active: str(t.activeForm),
-          status: str(t.status),
-        }))
-        last = 'todo'
-      } else if (use.tool === 'TaskCreate') {
-        created += 1
-        const fromResult = (use.result as { task?: { id?: unknown } } | undefined)?.task?.id
-        tasks.push({
-          id: typeof fromResult === 'string' ? fromResult : String(created),
-          title: str(use.input.subject),
-          active: str(use.input.activeForm),
-          status: 'pending',
-        })
-        last = 'task'
-      } else if (use.tool === 'TaskUpdate') {
-        const id = str(use.input.taskId)
-        const status = str(use.input.status)
-        if (status === 'deleted') {
-          tasks = tasks.filter(t => t.id !== id)
-        } else {
-          const task = tasks.find(t => t.id === id)
-          if (task) {
-            if (status) task.status = status
-            if (typeof use.input.subject === 'string') task.title = use.input.subject
-            if (typeof use.input.activeForm === 'string') task.active = use.input.activeForm
-          }
-        }
-        last = 'task'
-      }
+      if (use.tool === PROGRESS_TOOL) plan = planFromInput(use.input)
     }
   }
 
-  const items = last === 'todo' ? todos : last === 'task' ? tasks : []
-  if (items.length === 0) return null
-
-  const done = items.filter(i => i.status === 'completed').length
-  const running = items.find(i => i.status === 'in_progress') ?? items.find(i => i.status !== 'completed')
-
-  return { done, total: items.length, current: running ? running.active || running.title || null : null }
+  return plan
 }
 
 // ── 실행 경로 ──

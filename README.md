@@ -7,7 +7,7 @@ Claude Code mods by [Hugo-Jang](https://github.com/Hugo-Jang). Each folder is on
 
 | Mod | What it does |
 | --- | --- |
-| [`cockpit/`](cockpit/) | A cockpit above your prompt: model and effort, usage limits, a weather-style forecast of the context window, plan progress, model and effort pickers, and Resume / Rewind / Compact / Clear buttons that ask before they run. |
+| [`cockpit/`](cockpit/) | A cockpit above your prompt: model and effort, usage limits, a weather-style forecast of the context window, a progress bar for step-by-step work, model and effort pickers, and Resume / Rewind / Compact / Clear buttons that ask before they run. |
 
 Each mod has its own README with details, in [English](cockpit/README.md), [한국어](cockpit/README.ko.md) and [日本語](cockpit/README.ja.md).
 
